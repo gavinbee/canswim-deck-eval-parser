@@ -1,0 +1,14 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+# Local scanned PDFs and any other Tier-2 fixtures stay out of git
+data/*
+!data/.gitkeep
+# Generated outputs (JSON, CSV, XLSX, raw.json sidecars)
+output/*
+!output/.gitkeep
+.claude/
+*.log
