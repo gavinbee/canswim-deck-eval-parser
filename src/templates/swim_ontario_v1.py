@@ -66,16 +66,28 @@ This is a Swim Ontario On-Deck Evaluation form.
 Layout: up to 9 official-rows per page. Each row contains the official's
 name, club abbreviation, position (e.g. "Chief Timer", "Inspector of Turns",
 "Starter", "Referee"), lane assignment, count of times they've worked the
-position, mentor's name, level, and a "Successful initial" cell where the
-evaluator signs off.
+position, mentor's name, the mentor's officiating level (NOT the
+evaluated official's level), and a "Successful initial" cell where the
+mentor signs off.
 
 For the ``successful`` field, look at the entire row, not just the initials
-cell. Evaluators have no standard "not successful" convention — sometimes
-the whole row is crossed out, sometimes the initials cell is left blank and
-a mentor's name is filled in instead, sometimes there's a marginal note.
-Use your judgement: emit true if sign-off is clearly present, false if
-clearly absent (crossed out, explicit "no", etc.), or null if genuinely
-ambiguous.
+cell — and also at the row above when interpreting ditto-style marks.
+Evaluators have no standard "not successful" convention:
+
+- Initials clearly present in the "Successful initial" cell → emit
+  successful=true with high confidence.
+- Whole row is crossed out, or initials cell explicitly says "no" /
+  "redo" → emit successful=false.
+- Initials cell is blank but a mentor name is filled in → typically
+  successful=false (the eval happened but no sign-off was given).
+- Ditto marks, double-tick marks (″, ″, ditto), or a down-arrow in the
+  Mentor, Level, or Successful-initial cells — these mean "same as the
+  row above". Carry the value from the row above for the affected
+  columns, but emit a LOWER confidence (e.g. 0.6) so the row surfaces
+  for human review. This pattern is common when one evaluator signs off
+  many rows at once.
+- Marginal notes ("retry next meet", etc.) → judgement call, often
+  successful=null with a rationale.
 
 Dates on this form are typically formatted like "Sat, Apr 11, 2026" or
 "April 11, 2026". Emit them as ISO YYYY-MM-DD.

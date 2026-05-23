@@ -30,7 +30,7 @@ COC = "coc"
 
 # Session-level (may vary per page within a multi-session PDF).
 COMPETITION_COORDINATOR = "competition_coordinator"
-CC_LEVEL = "cc_level"
+CC_LEVEL = "cc_level"               # The Competition Coordinator's level.
 DATE_SESSION = "date_session"
 SESSION_NUMBER = "session_number"
 PAGE_NUMBER = "page_number"
@@ -42,8 +42,10 @@ CLUB = "club"
 POSITION = "position"
 LANE_NUMBER = "lane_number"
 TIMES_WORKED_POSITION = "times_worked_position"
-MENTOR = "mentor"
-LEVEL = "level"
+MENTOR = "mentor"                   # Mentor / signing-off official's name.
+LEVEL = "level"                     # The MENTOR's officiating level, not
+                                    # the level of the official being
+                                    # evaluated.
 SUCCESSFUL = "successful"
 
 

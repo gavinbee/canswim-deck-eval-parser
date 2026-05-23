@@ -35,7 +35,9 @@ Other provinces: please [file an issue](https://github.com/gavinbee/canswim-deck
 - [Output schema](docs/output-schema.md) — the canonical JSON shape and how CSV/XLSX are derived from it
 - [Models](docs/models.md) — vision and text model choices, GPU-tier auto-pick
 - [Architecture](docs/architecture.md) — how the pipeline works end-to-end (CURRENT state)
+- [PDF parsing notes](docs/pdf-parsing.md) — PyMuPDF gotchas, widget naming, rasterization choices
 - [Templates](docs/templates/README.md) — how to add a provincial template
+  - [Swim Ontario reference](docs/templates/swim_ontario.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Design docs](docs/design/) — the *why*, ordered by date
 
