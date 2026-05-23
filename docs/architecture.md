@@ -14,7 +14,8 @@
 | Form-field fast path | [`src/form_extract.py`](../src/form_extract.py) | implemented |
 | Merge + multi-meet detection | [`src/merge.py`](../src/merge.py) | implemented |
 | Output (JSON + CSV + XLSX) | [`src/output.py`](../src/output.py) | implemented |
-| Vision extraction, template detection, Ollama lifecycle, CLI, interactive review | — | pending — see [open issues](https://github.com/gavinbee/canswim-deck-eval-parser/issues) |
+| End-to-end CLI (form-field path) | [`main.py`](../main.py) | implemented |
+| Vision extraction, template detection, Ollama lifecycle, interactive review | — | pending — see [open issues](https://github.com/gavinbee/canswim-deck-eval-parser/issues) |
 
 ## How a parse runs (form-field path)
 
