@@ -12,7 +12,8 @@
 | Quebec / Alberta / BC templates | stubs in `src/templates/` | reserved (raise `NotImplementedError`) |
 | PDF I/O (PyMuPDF wrapper) | [`src/pdf_io.py`](../src/pdf_io.py) | implemented |
 | Form-field fast path | [`src/form_extract.py`](../src/form_extract.py) | implemented |
-| Vision extraction, template detection, Ollama lifecycle, merge, output, CLI, interactive review | — | pending — see [open issues](https://github.com/gavinbee/canswim-deck-eval-parser/issues) |
+| Output (JSON + CSV + XLSX) | [`src/output.py`](../src/output.py) | implemented |
+| Vision extraction, template detection, Ollama lifecycle, merge, CLI, interactive review | — | pending — see [open issues](https://github.com/gavinbee/canswim-deck-eval-parser/issues) |
 
 ## How a parse runs (form-field path)
 
@@ -23,6 +24,8 @@ Today only the form-field path is wired together:
 3. For each page, **read widgets** via `pdf_io.read_widgets`, which returns a `{widget_name: value}` dict with PyMuPDF's `[NNN]` disambiguator suffix stripped. See [`pdf-parsing.md`](pdf-parsing.md) for that and other gotchas.
 4. Pass the widget dict plus the appropriate `Template` to `form_extract.extract_page`. It walks the template's `widget_field_map`, expanding `{i}` placeholders for per-row entries, and emits a `PageExtraction` (one `meet` dict, one `session` dict, and a list of `rows`, all of `FieldValue` with confidence 1.0). Trailing blank rows are dropped.
 5. The result is a `list[PageExtraction]`.
+
+> Note: the merge module that turns `list[PageExtraction]` into a `ParseResult` is still pending (issue #4). For now, callers wanting to write output assemble a `ParseResult` directly and pass it to `src.output.write_all(result, output_dir)`, which writes the canonical `.json` plus derived `.csv` and `.xlsx` (one sheet, `evaluations`). See [`output-schema.md`](output-schema.md) for the column contract.
 
 The vision path (which will share the same `PageExtraction` output shape) is not yet wired in; see issue #8 onwards.
 
