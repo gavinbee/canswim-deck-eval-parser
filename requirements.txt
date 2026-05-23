@@ -4,3 +4,7 @@ ollama>=0.3
 pandas>=2.0
 openpyxl>=3.1
 pytest>=8.0
+# Only used by tests/fixtures/form_field/make_synthetic_fixture.py to
+# regenerate the form-field test fixture with deterministic fake names.
+# Not imported at runtime.
+faker>=30.0
