@@ -6,16 +6,25 @@ Parse Canadian swimming **On-Deck Evaluation** PDFs into a structured spreadshee
 
 ## Quick start
 
-```
-# One-time setup (installs Ollama, pulls the vision and edit models, sets up .venv)
-scripts/install.ps1     # Windows
-scripts/install.sh      # macOS / Linux
+```bash
+# 1. Install Ollama (one-time) — see docs/installation.md for full details
+winget install Ollama.Ollama         # Windows
+brew install ollama                  # macOS
+curl -fsSL https://ollama.com/install.sh | sh   # Linux
 
-# Parse a single PDF
+# 2. Set up the parser
+git clone https://github.com/gavinbee/canswim-deck-eval-parser.git
+cd canswim-deck-eval-parser
+python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+
+# 3. Parse a PDF — models auto-pull on first run, daemon auto-starts/stops
 python main.py path/to/eval.pdf
 ```
 
 Output lands in `output/` as `<pdf-stem>.json` (canonical), plus a derived `.csv` and `.xlsx`.
+
+One-command install scripts (`scripts/install.ps1` / `install.sh`) wrap all of step 1+2 and are tracked under [issue #11](https://github.com/gavinbee/canswim-deck-eval-parser/issues/11).
 
 ## Supported templates
 
