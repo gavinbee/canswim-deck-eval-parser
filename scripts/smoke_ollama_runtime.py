@@ -30,9 +30,15 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 
-from src import ollama_runtime
-from src.ollama_runtime import OllamaDaemon
+# Running ``python scripts/smoke_ollama_runtime.py`` from the repo root
+# puts only ``scripts/`` on sys.path, not the root itself — so ``from src
+# import ...`` fails. Prepend the repo root explicitly.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src import ollama_runtime  # noqa: E402
+from src.ollama_runtime import OllamaDaemon  # noqa: E402
 
 
 def _say(msg: str) -> None:
