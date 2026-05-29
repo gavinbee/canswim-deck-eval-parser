@@ -258,13 +258,13 @@ def _call_model(
     """Call the model and return parsed JSON, retrying once on failure."""
     prompt = build_prompt(template, filename)
     text = _generate(client, model, prompt, png_bytes)
-    parsed = _try_parse_json(text)
+    parsed = try_parse_json(text)
     if _is_structural(parsed):
         return parsed
 
     log.warning("Vision model returned unparseable output; retrying once.")
     text = _generate(client, model, prompt + _RETRY_NUDGE, png_bytes)
-    parsed = _try_parse_json(text)
+    parsed = try_parse_json(text)
     if _is_structural(parsed):
         return parsed
 
@@ -296,10 +296,12 @@ def _generate(
     return text or ""
 
 
-def _try_parse_json(text: str) -> Any:
+def try_parse_json(text: str) -> Any:
     """Parse model text to JSON, tolerating markdown code fences.
 
     Returns the parsed object, or ``None`` if it isn't valid JSON.
+    Shared with ``src.template_detect`` so both modules handle the
+    ```json ... ``` fences some models emit the same way.
     """
     if not text:
         return None
