@@ -211,7 +211,7 @@ def _default_template_path() -> Path:
             return c
     raise FileNotFoundError(
         "Could not find eval-gen/eval_form.pdf. Either clone "
-        "https://github.com/gavinbee/eval-gen alongside this repo, or "
+        "https://github.com/swimblocks/deck-eval-gen alongside this repo, or "
         "pass --template /path/to/eval_form.pdf"
     )
 

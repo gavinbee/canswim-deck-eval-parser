@@ -4,7 +4,7 @@ Reference for the **Swim Ontario On-Deck Evaluation** template, as implemented i
 
 ## Source
 
-The field labels and widget names in this template are sourced **verbatim** from [`eval-gen`](https://github.com/gavinbee/eval-gen)'s `_build_fields()`, which was reverse-engineered from the official Swim Ontario blank form (`eval-gen/eval_form.pdf`). Keeping this template in lockstep with `eval-gen` means any `eval-gen` output is parsable through the form-field fast path with no extra work.
+The field labels and widget names in this template are sourced **verbatim** from [`eval-gen`](https://github.com/swimblocks/deck-eval-gen)'s `_build_fields()`, which was reverse-engineered from the official Swim Ontario blank form (`eval-gen/eval_form.pdf`). Keeping this template in lockstep with `eval-gen` means any `eval-gen` output is parsable through the form-field fast path with no extra work.
 
 ## Page properties
 
