@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any, Optional, Protocol
 
@@ -205,11 +206,22 @@ def extract_pdf(
         page_no = i + 1
         cached = cached_raw.get(str(page_no)) if cached_raw else None
         if cached is not None:
-            log.debug("Using cached vision response for page %d", page_no)
+            log.info("Page %d/%d: using cached vision response", page_no, n_pages)
             raw = cached
         else:
+            # The first page's time includes the model's cold load into
+            # VRAM, which dominates on a tight GPU — logging per-page
+            # timing makes that visible instead of looking like a hang.
+            log.info("Page %d/%d: extracting with %s …", page_no, n_pages, model)
+            start = time.monotonic()
             png = pdf_io.rasterize_page(pdf_path, i, dpi=dpi)
             raw = _call_model(client, model, template, filename, png)
+            elapsed = time.monotonic() - start
+            n_rows = len(raw.get("rows") or []) if isinstance(raw, dict) else 0
+            log.info(
+                "Page %d/%d: done in %.1fs (%d row(s))",
+                page_no, n_pages, elapsed, n_rows,
+            )
         raw_by_page[str(page_no)] = raw
         pages.append(_parse_response(raw, page_number=page_no))
 

@@ -287,6 +287,34 @@ class TestExtractPdfOrchestration:
         assert len(pages[0].rows) == 2
         assert len(pages[1].rows) == 1
 
+    def test_logs_per_page_progress(self, caplog):
+        client = _client_returning(_good_response(n_rows=2), _good_response(n_rows=1))
+        with patch("src.vision_extract.pdf_io.page_count", return_value=2), \
+             patch("src.vision_extract.pdf_io.rasterize_page", return_value=b"PNG"), \
+             caplog.at_level("INFO", logger="src.vision_extract"):
+            extract_pdf("scan.pdf", ONTARIO, client=client, model="m")
+        msgs = [r.message for r in caplog.records]
+        # One "extracting" line and one "done" line per page, numbered N/total.
+        assert any("Page 1/2: extracting" in m for m in msgs)
+        assert any("Page 1/2: done" in m for m in msgs)
+        assert any("Page 2/2: extracting" in m for m in msgs)
+        # The done line reports the row count it parsed.
+        assert any("Page 1/2: done" in m and "2 row(s)" in m for m in msgs)
+
+    def test_logs_cache_hit(self, tmp_path, caplog):
+        cache = tmp_path / "scan.raw.json"
+        cache.write_text(json.dumps({
+            "model": "m", "source_pdf": "scan.pdf",
+            "pages": {"1": _good_response(n_rows=1)},
+        }), encoding="utf-8")
+        client = _client_returning()  # must not be called
+        with patch("src.vision_extract.pdf_io.page_count", return_value=1), \
+             patch("src.vision_extract.pdf_io.rasterize_page", return_value=b"PNG"), \
+             caplog.at_level("INFO", logger="src.vision_extract"):
+            extract_pdf("scan.pdf", ONTARIO, client=client, model="m",
+                        cache_path=cache)
+        assert any("Page 1/1: using cached" in r.message for r in caplog.records)
+
 
 class TestCache:
     def test_writes_cache_then_reuses_without_calling_model(self, tmp_path):
