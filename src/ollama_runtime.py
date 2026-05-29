@@ -111,7 +111,7 @@ def _install_hint() -> str:
         "Or run the bundled installer:  scripts/install.ps1   (Windows)\n"
         "                               scripts/install.sh    (other)\n"
         "Full guide: "
-        "https://github.com/gavinbee/canswim-deck-eval-parser/blob/main/docs/installation.md"
+        "https://github.com/swimblocks/deck-eval-parser/blob/main/docs/installation.md"
     )
 
 

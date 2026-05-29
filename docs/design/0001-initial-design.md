@@ -101,7 +101,7 @@ Ollama itself (the binary) is a runtime dependency the user must install once. A
        Linux:    curl -fsSL https://ollama.com/install.sh | sh
    Or run the bundled installer:  scripts/install.ps1   (Windows)
                                    scripts/install.sh    (macOS/Linux)
-   Full guide: https://github.com/gavinbee/canswim-deck-eval-parser#installation
+   Full guide: https://github.com/swimblocks/deck-eval-parser#installation
    ```
 2. **Daemon running?** Probe `http://localhost:11434/api/tags`. If unreachable, spawn `ollama serve` as a subprocess via a context manager that wires up `atexit` + signal handlers to stop it on exit (clean shutdown via `Popen.terminate()` then `wait(timeout=5)` then `kill()`). If we started the daemon, we stop it. If the user already had it running, we leave it running. A small `OllamaDaemon` class in `src/ollama_runtime.py` encapsulates this.
 3. **Models pulled?** Query `/api/tags`. For each required tag (`qwen2.5vl:7b`, and `qwen2.5:7b` only if `--interactive`/`--review-all`), if missing, `ollama pull <tag>` with progress streamed to stderr. Behind `--no-auto-pull` (default off) the parser exits with instructions instead.

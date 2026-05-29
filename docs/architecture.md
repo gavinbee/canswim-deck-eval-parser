@@ -18,7 +18,7 @@
 | Ollama runtime + lifecycle | [`src/ollama_runtime.py`](../src/ollama_runtime.py) | implemented |
 | GPU detection + tier picker | [`src/gpu_detect.py`](../src/gpu_detect.py) | implemented |
 | Vision extraction | [`src/vision_extract.py`](../src/vision_extract.py) | implemented (not yet wired into the CLI — see #10) |
-| Template detection, interactive review | — | pending — see [open issues](https://github.com/gavinbee/canswim-deck-eval-parser/issues) |
+| Template detection, interactive review | — | pending — see [open issues](https://github.com/swimblocks/deck-eval-parser/issues) |
 
 ## How a parse runs (form-field path)
 

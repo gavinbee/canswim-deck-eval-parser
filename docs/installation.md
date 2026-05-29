@@ -2,7 +2,7 @@
 
 The parser has two install steps: **Ollama** (the local model runtime) and the parser itself. Both are one-time. After that, the parser auto-manages the daemon and pulls models on first run.
 
-> **Install scripts** (`scripts/install.ps1` / `install.sh`) that wrap all of this in one command are tracked under [issue #11](https://github.com/gavinbee/canswim-deck-eval-parser/issues/11). Until they land, follow the manual steps below.
+> **Install scripts** (`scripts/install.ps1` / `install.sh`) that wrap all of this in one command are tracked under [issue #11](https://github.com/swimblocks/deck-eval-parser/issues/11). Until they land, follow the manual steps below.
 
 ## What you'll need
 
@@ -62,7 +62,7 @@ ollama --version
 ## 2. Clone the repo + create a virtual environment
 
 ```bash
-git clone https://github.com/gavinbee/canswim-deck-eval-parser.git
+git clone https://github.com/swimblocks/deck-eval-parser.git
 cd canswim-deck-eval-parser
 python -m venv .venv
 ```
@@ -130,4 +130,4 @@ The parser uses `shutil.which("ollama")` to locate the binary. This honours `PAT
 PyMuPDF wheels are published for all major platforms — failures usually mean an outdated `pip`. Run `python -m pip install --upgrade pip` first.
 
 **Real scanned PDFs return `extraction failure — vision extraction not yet implemented`.**
-Expected today. The vision path is tracked across issues [#6](https://github.com/gavinbee/canswim-deck-eval-parser/issues/6)–[#10](https://github.com/gavinbee/canswim-deck-eval-parser/issues/10). Fillable PDFs (e.g. `eval-gen` output, online form exports) parse end-to-end now.
+Expected today. The vision path is tracked across issues [#6](https://github.com/swimblocks/deck-eval-parser/issues/6)–[#10](https://github.com/swimblocks/deck-eval-parser/issues/10). Fillable PDFs (e.g. `eval-gen` output, online form exports) parse end-to-end now.

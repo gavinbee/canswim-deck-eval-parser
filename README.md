@@ -2,7 +2,7 @@
 
 Parse Canadian swimming **On-Deck Evaluation** PDFs into a structured spreadsheet, using a local vision LLM. Hand-filled scanned forms or natively-generated PDFs, both supported.
 
-> **Status:** under construction. **Fillable PDFs (e.g. `eval-gen` output, online-form exports) parse end-to-end today.** Scanned PDFs go through a local vision model; that path is being built. See [docs/design/0001-initial-design.md](docs/design/0001-initial-design.md) and [the open issues](https://github.com/gavinbee/canswim-deck-eval-parser/issues).
+> **Status:** under construction. **Fillable PDFs (e.g. `eval-gen` output, online-form exports) parse end-to-end today.** Scanned PDFs go through a local vision model; that path is being built. See [docs/design/0001-initial-design.md](docs/design/0001-initial-design.md) and [the open issues](https://github.com/swimblocks/deck-eval-parser/issues).
 
 ## Quick start
 
@@ -13,7 +13,7 @@ brew install ollama                  # macOS
 curl -fsSL https://ollama.com/install.sh | sh   # Linux
 
 # 2. Set up the parser
-git clone https://github.com/gavinbee/canswim-deck-eval-parser.git
+git clone https://github.com/swimblocks/deck-eval-parser.git
 cd canswim-deck-eval-parser
 python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
@@ -24,18 +24,18 @@ python main.py path/to/eval.pdf
 
 Output lands in `output/` as `<pdf-stem>.json` (canonical), plus a derived `.csv` and `.xlsx`.
 
-One-command install scripts (`scripts/install.ps1` / `install.sh`) wrap all of step 1+2 and are tracked under [issue #11](https://github.com/gavinbee/canswim-deck-eval-parser/issues/11).
+One-command install scripts (`scripts/install.ps1` / `install.sh`) wrap all of step 1+2 and are tracked under [issue #11](https://github.com/swimblocks/deck-eval-parser/issues/11).
 
 ## Supported templates
 
 | Province | Template ID | Status |
 |---|---|---|
 | Ontario | `swim_ontario_v1` | implemented (v1) |
-| Quebec | `swim_quebec_v1` | stub — [follow-up issue](https://github.com/gavinbee/canswim-deck-eval-parser/issues) |
+| Quebec | `swim_quebec_v1` | stub — [follow-up issue](https://github.com/swimblocks/deck-eval-parser/issues) |
 | Alberta | `swim_alberta_v1` | stub |
 | British Columbia | `swim_bc_v1` | stub |
 
-Other provinces: please [file an issue](https://github.com/gavinbee/canswim-deck-eval-parser/issues/new) with a sample PDF.
+Other provinces: please [file an issue](https://github.com/swimblocks/deck-eval-parser/issues/new) with a sample PDF.
 
 ## Documentation
 

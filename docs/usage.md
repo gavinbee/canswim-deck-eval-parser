@@ -16,15 +16,15 @@ Outputs land in `./output/` as `<pdf-stem>.json`, `<pdf-stem>.csv`, and `<pdf-st
 |---|---|---|
 | *(positional)* `pdf` | required | the input PDF |
 | `--output-dir <DIR>` | `output` | output directory (created if missing) |
-| `--template <ID>` | `swim_ontario_v1` | provincial template to parse against. Becomes "auto-detect" once template detection lands ([#9](https://github.com/gavinbee/canswim-deck-eval-parser/issues/9)) |
+| `--template <ID>` | `swim_ontario_v1` | provincial template to parse against. Becomes "auto-detect" once template detection lands ([#9](https://github.com/swimblocks/deck-eval-parser/issues/9)) |
 | `-v` / `-vv` | `WARNING` | verbosity. `-v` = `INFO`, `-vv` = `DEBUG` |
-| `--vision-model <TAG>` | — | reserved for the vision path ([#8](https://github.com/gavinbee/canswim-deck-eval-parser/issues/8)) |
-| `--edit-model <TAG>` | — | reserved for interactive edits ([#13](https://github.com/gavinbee/canswim-deck-eval-parser/issues/13)) |
-| `--no-cache` | — | reserved for vision-path caching ([#8](https://github.com/gavinbee/canswim-deck-eval-parser/issues/8)) |
-| `--no-auto-pull` | — | reserved for Ollama runtime ([#6](https://github.com/gavinbee/canswim-deck-eval-parser/issues/6)) |
-| `--interactive` | — | reserved for interactive review ([#12](https://github.com/gavinbee/canswim-deck-eval-parser/issues/12)) |
-| `--review-all` | — | reserved for walk-every-eval mode ([#14](https://github.com/gavinbee/canswim-deck-eval-parser/issues/14)) |
-| `--low-confidence-threshold <FLOAT>` | — | reserved for interactive review ([#12](https://github.com/gavinbee/canswim-deck-eval-parser/issues/12)) |
+| `--vision-model <TAG>` | — | reserved for the vision path ([#8](https://github.com/swimblocks/deck-eval-parser/issues/8)) |
+| `--edit-model <TAG>` | — | reserved for interactive edits ([#13](https://github.com/swimblocks/deck-eval-parser/issues/13)) |
+| `--no-cache` | — | reserved for vision-path caching ([#8](https://github.com/swimblocks/deck-eval-parser/issues/8)) |
+| `--no-auto-pull` | — | reserved for Ollama runtime ([#6](https://github.com/swimblocks/deck-eval-parser/issues/6)) |
+| `--interactive` | — | reserved for interactive review ([#12](https://github.com/swimblocks/deck-eval-parser/issues/12)) |
+| `--review-all` | — | reserved for walk-every-eval mode ([#14](https://github.com/swimblocks/deck-eval-parser/issues/14)) |
+| `--low-confidence-threshold <FLOAT>` | — | reserved for interactive review ([#12](https://github.com/swimblocks/deck-eval-parser/issues/12)) |
 
 ## Exit codes
 

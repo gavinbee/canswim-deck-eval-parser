@@ -1,6 +1,6 @@
 # Contributing
 
-This repo follows the same patterns as [`canada-swim-tech-survey`](https://github.com/gavinbee/canada-swim-tech-survey).
+This repo follows the same patterns as [`canada-swim-tech-survey`](https://github.com/swimblocks/swim-club-tech-survey).
 
 ## Workflow
 
