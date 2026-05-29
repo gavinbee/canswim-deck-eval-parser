@@ -14,24 +14,38 @@
 | Form-field fast path | [`src/form_extract.py`](../src/form_extract.py) | implemented |
 | Merge + multi-meet detection | [`src/merge.py`](../src/merge.py) | implemented |
 | Output (JSON + CSV + XLSX) | [`src/output.py`](../src/output.py) | implemented |
-| End-to-end CLI (form-field path) | [`main.py`](../main.py) | implemented |
+| End-to-end CLI (both paths) | [`main.py`](../main.py) | implemented |
 | Ollama runtime + lifecycle | [`src/ollama_runtime.py`](../src/ollama_runtime.py) | implemented |
 | GPU detection + tier picker | [`src/gpu_detect.py`](../src/gpu_detect.py) | implemented |
-| Vision extraction | [`src/vision_extract.py`](../src/vision_extract.py) | implemented (not yet wired into the CLI — see #10) |
-| Template detection | [`src/template_detect.py`](../src/template_detect.py) | implemented (not yet wired into the CLI — see #10) |
-| Interactive review | — | pending — see [open issues](https://github.com/gavinbee/canswim-deck-eval-parser/issues) |
+| Vision extraction | [`src/vision_extract.py`](../src/vision_extract.py) | implemented |
+| Template detection | [`src/template_detect.py`](../src/template_detect.py) | implemented |
+| Interactive review / edit loop | — | pending — see [open issues](https://github.com/swimblocks/deck-eval-parser/issues) |
 
-## How a parse runs (form-field path)
+## How a parse runs
 
-Today only the form-field path is wired together:
+`main.py` picks one of two paths based on whether the PDF has fillable widgets (`pdf_io.has_form_fields`).
+
+### Form-field path (fillable PDFs — fast, no model)
 
 1. **Open** the PDF via `pdf_io.open_pdf` (context-managed `fitz.Document`).
-2. **Detect** whether it has fillable widgets via `pdf_io.has_form_fields`.
-3. For each page, **read widgets** via `pdf_io.read_widgets`, which returns a `{widget_name: value}` dict with PyMuPDF's `[NNN]` disambiguator suffix stripped. See [`pdf-parsing.md`](pdf-parsing.md) for that and other gotchas.
-4. Pass the widget dict plus the appropriate `Template` to `form_extract.extract_page`. It walks the template's `widget_field_map`, expanding `{i}` placeholders for per-row entries, and emits a `PageExtraction` (one `meet` dict, one `session` dict, and a list of `rows`, all of `FieldValue` with confidence 1.0). Trailing blank rows are dropped.
-5. The result is a `list[PageExtraction]`.
-6. **Merge** via `src.merge.merge(pages, ...)` to assemble the canonical `ParseResult`. Page 1's meet header is authoritative; later pages get `meet_match` set to `confirmed` (identical headers — eval-gen output), `carried` (blank), or — for headers that differ in non-trivial ways — go through the `same_meet_checker` callable (a Qwen2.5-7B call once the runtime lands; today the form-field path's fast paths handle everything `eval-gen` produces). A `different` verdict raises `MultiMeetError` (exit code 4). See [Multi-page reconciliation](#multi-page-reconciliation) below.
-7. **Write** via `src.output.write_all(result, output_dir)` — JSON canonical, plus derived CSV and XLSX (one `evaluations` sheet). See [`output-schema.md`](output-schema.md).
+2. For each page, **read widgets** via `pdf_io.read_widgets`, which returns a `{widget_name: value}` dict with PyMuPDF's `[NNN]` disambiguator suffix stripped. See [`pdf-parsing.md`](pdf-parsing.md).
+3. Pass the widget dict plus the `Template` to `form_extract.extract_page` → a `PageExtraction` per page (confidence 1.0; trailing blank rows dropped).
+4. Template defaults to `swim_ontario_v1` (or `--template`); no detection — we don't spin up a model just to classify a fillable form.
+5. **Merge** then **write** (shared tail, below).
+
+### Vision path (scanned / flat PDFs)
+
+1. **Resolve the model**: `--vision-model`, else `gpu_detect` picks a tier from free VRAM (see [`models.md`](models.md)).
+2. **Start Ollama** via the `OllamaDaemon` context manager — auto-starts the daemon if needed, ensures the model is pulled, stops the daemon on exit if we started it.
+3. **Detect the template** from page 1 via `template_detect.detect_template` (unless `--template`). A recognized-but-stubbed province (e.g. Quebec) raises a helpful `NotImplementedError` (exit 2); a low-confidence / unknown result raises `TemplateDetectionError` (exit 2).
+4. **Extract** each page with `vision_extract.extract_pdf` → `PageExtraction` list, cached to `<stem>.raw.json` (skip with `--no-cache`).
+5. **Merge** with a `same_meet_checker` backed by the loaded vision model, so multi-page scans whose headers differ only by OCR noise get a real "same meet?" judgement instead of a spurious `MultiMeetError`.
+6. **Write**.
+
+### Shared tail (both paths)
+
+- **Merge** via `src.merge.merge(pages, ...)` assembles the canonical `ParseResult`. Page 1's meet header is authoritative; later pages get `meet_match` = `confirmed` / `carried` / (model-judged) `confirmed`/`unknown`, or raise `MultiMeetError` (exit 4) on a `different` verdict. See [Multi-page reconciliation](#multi-page-reconciliation).
+- **Write** via `src.output.write_all(result, output_dir)` — JSON canonical, plus derived CSV and XLSX (one `evaluations` sheet). See [`output-schema.md`](output-schema.md).
 
 ## Multi-page reconciliation
 
@@ -47,7 +61,7 @@ Today only the form-field path is wired together:
 
 `meet_match.confidence` is folded into `row_confidence` so a shaky page-N reconciliation drags every row of that page into the low-confidence review.
 
-The vision path (which will share the same `PageExtraction` output shape) is not yet wired in; see issue #8 onwards.
+On the vision path the `same_meet_checker` is backed by the loaded vision model (`vision_extract.make_same_meet_checker`); on the form-field path no checker is passed, so the deterministic fast paths handle everything `eval-gen` produces and any genuine disagreement raises `MultiMeetError`.
 
 ## Key shapes
 

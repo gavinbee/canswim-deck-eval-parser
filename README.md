@@ -2,7 +2,7 @@
 
 Parse Canadian swimming **On-Deck Evaluation** PDFs into a structured spreadsheet, using a local vision LLM. Hand-filled scanned forms or natively-generated PDFs, both supported.
 
-> **Status:** under construction. **Fillable PDFs (e.g. `eval-gen` output, online-form exports) parse end-to-end today.** Scanned PDFs go through a local vision model; that path is being built. See [docs/design/0001-initial-design.md](docs/design/0001-initial-design.md) and [the open issues](https://github.com/swimblocks/deck-eval-parser/issues).
+> **Status:** under construction. **Both paths now run end-to-end:** fillable PDFs (e.g. `eval-gen` output, online-form exports) via a fast deterministic path, and scanned PDFs via a local vision model (Qwen2.5-VL through Ollama). Interactive review / correction is next. See [docs/design/0001-initial-design.md](docs/design/0001-initial-design.md) and [the open issues](https://github.com/swimblocks/deck-eval-parser/issues).
 
 ## Quick start
 

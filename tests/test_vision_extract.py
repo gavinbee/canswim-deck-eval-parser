@@ -328,6 +328,51 @@ class TestCache:
         assert client.generate.call_count == 1
         assert len(pages[0].rows) == 1
 
+class TestSameMeetChecker:
+    """make_same_meet_checker wraps the vision model as a merge.SameMeetChecker."""
+
+    def _meet(self, name):
+        return {
+            s.COMPETITION_NAME: s.FieldValue(name, 0.9),
+            s.HOST_CLUB: s.FieldValue("AAC", 0.9),
+        }
+
+    def test_same_verdict(self):
+        client = _client_returning({"verdict": "same", "confidence": 0.88})
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("Aurora Open 2026"),
+                          self._meet("Aurora Open 2O26"))  # OCR noise
+        assert verdict.verdict == "same"
+        assert verdict.confidence == 0.88
+
+    def test_different_verdict(self):
+        client = _client_returning({"verdict": "different", "confidence": 0.95})
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("Aurora Open"), self._meet("Birch Cup"))
+        assert verdict.verdict == "different"
+
+    def test_text_only_call_has_no_image(self):
+        client = _client_returning({"verdict": "same", "confidence": 0.9})
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        checker(self._meet("X"), self._meet("X"))
+        # The same-meet check is text-only — no image attached.
+        assert "images" not in client.generate.call_args.kwargs
+
+    def test_garbage_response_is_unknown(self):
+        client = _client_returning("not json")
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("X"), self._meet("Y"))
+        assert verdict.verdict == "unknown"
+        assert verdict.confidence == 0.0
+
+    def test_bad_verdict_string_is_unknown(self):
+        client = _client_returning({"verdict": "maybe", "confidence": 0.5})
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("X"), self._meet("Y"))
+        assert verdict.verdict == "unknown"
+
+
+class TestCacheMore:
     def test_cache_ignored_when_model_differs(self, tmp_path):
         cache = tmp_path / "scan.raw.json"
         cache.write_text(json.dumps({

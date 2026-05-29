@@ -238,6 +238,86 @@ def extract_page(
 
 
 # ---------------------------------------------------------------------------
+# Same-meet checker (for merge's multi-page reconciliation)
+# ---------------------------------------------------------------------------
+
+
+_SAME_MEET_PROMPT = """\
+Two pages of one scanned PDF each carry a meet header. Because the text
+was read off a scan, the same meet can appear with OCR noise, different
+abbreviations, or minor spelling differences. Decide whether these two
+headers refer to the SAME swimming meet.
+
+Page 1 header:
+{page_one}
+
+Other page header:
+{page_n}
+
+Respond with a SINGLE JSON object, nothing else:
+{{"verdict": "same" | "different" | "unknown", "confidence": <0.0-1.0>}}
+
+Use "same" if they're clearly the same meet (allowing for OCR noise),
+"different" if they're clearly different meets, "unknown" if you can't
+tell. Output ONLY the JSON object."""
+
+
+def make_same_meet_checker(client: VisionClient, model: str):
+    """Build a ``merge.SameMeetChecker`` backed by the loaded vision model.
+
+    Reuses the already-loaded vision model (Qwen2.5-VL handles text-only
+    prompts fine) rather than pulling a separate text model, so a
+    multi-page scan whose headers differ only by OCR noise gets a real
+    "same meet?" judgement instead of a spurious ``MultiMeetError``.
+
+    Returns a callable matching ``merge.SameMeetChecker``: it takes the
+    two pages' meet-field dicts and returns a ``merge.SameMeetVerdict``.
+    """
+    # Imported here (not at module top) to avoid a circular import:
+    # merge doesn't import vision_extract, but vision_extract reaching
+    # into merge at import time would couple their load order.
+    from .merge import SameMeetVerdict
+
+    def checker(page_one, page_n) -> "SameMeetVerdict":
+        prompt = _SAME_MEET_PROMPT.format(
+            page_one=_render_meet(page_one),
+            page_n=_render_meet(page_n),
+        )
+        response = client.generate(
+            model=model,
+            prompt=prompt,
+            format="json",
+            options={"temperature": 0},
+        )
+        text = getattr(response, "response", None)
+        if text is None and isinstance(response, dict):
+            text = response.get("response")
+        parsed = try_parse_json(text or "")
+
+        verdict = "unknown"
+        confidence = 0.0
+        if isinstance(parsed, dict):
+            v = parsed.get("verdict")
+            if v in {"same", "different", "unknown"}:
+                verdict = v
+            confidence = _clamp_confidence(parsed.get("confidence"))
+        return SameMeetVerdict(verdict=verdict, confidence=confidence)
+
+    return checker
+
+
+def _render_meet(meet: dict) -> str:
+    """Render a ``{canonical_key: FieldValue}`` meet dict as readable text."""
+    lines = []
+    for key, fv in meet.items():
+        value = getattr(fv, "value", fv)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        lines.append(f"  {key}: {value}")
+    return "\n".join(lines) if lines else "  (no meet fields)"
+
+
+# ---------------------------------------------------------------------------
 # Model invocation
 # ---------------------------------------------------------------------------
 
