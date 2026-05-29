@@ -253,6 +253,24 @@ class TestModelCallAndRetry:
         with pytest.raises(VisionExtractionError):
             extract_page(b"x", ONTARIO, "x.pdf", 1, client=client, model="m")
 
+    def test_ollama_response_error_becomes_clean_vision_error(self):
+        # A 500 from the model server (e.g. VRAM / GGML assert) must
+        # surface as a VisionExtractionError with actionable guidance,
+        # not a raw traceback — and we don't retry a deterministic 500.
+        import ollama
+        client = MagicMock()
+        client.generate.side_effect = ollama.ResponseError(
+            "GGML_ASSERT(a->ne[2] * 4 == b->ne[0]) failed", 500,
+        )
+        with pytest.raises(VisionExtractionError) as exc:
+            extract_page(b"x", ONTARIO, "x.pdf", 1, client=client, model="qwen2.5vl:7b")
+        msg = str(exc.value)
+        assert "qwen2.5vl:7b" in msg
+        assert "qwen2.5vl:3b" in msg          # suggests the smaller model
+        assert "update Ollama" in msg.lower() or "update ollama" in msg.lower()
+        # Deterministic server error → single attempt, no retry.
+        assert client.generate.call_count == 1
+
     def test_strips_markdown_fences(self):
         fenced = "```json\n" + json.dumps(_good_response(n_rows=1)) + "\n```"
         client = _client_returning(fenced)
@@ -398,6 +416,17 @@ class TestSameMeetChecker:
         checker = vision_extract.make_same_meet_checker(client, "m")
         verdict = checker(self._meet("X"), self._meet("Y"))
         assert verdict.verdict == "unknown"
+
+    def test_response_error_degrades_to_unknown(self):
+        # A model error in the same-meet check must NOT abort the parse —
+        # degrade to "unknown" so the page carries forward for review.
+        import ollama
+        client = MagicMock()
+        client.generate.side_effect = ollama.ResponseError("boom", 500)
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("X"), self._meet("Y"))
+        assert verdict.verdict == "unknown"
+        assert verdict.confidence == 0.0
 
 
 class TestCacheMore:

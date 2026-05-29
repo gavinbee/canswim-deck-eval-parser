@@ -137,6 +137,18 @@ class TestDetectionErrors:
         with pytest.raises(TemplateDetectionError):
             _detect({"template_id": "swim_ontario_v1"})
 
+    def test_ollama_response_error_becomes_clean_detection_error(self):
+        # A model/server error during detection surfaces as a clean
+        # TemplateDetectionError with smaller-model guidance, not a
+        # traceback.
+        import ollama
+        client = MagicMock()
+        client.generate.side_effect = ollama.ResponseError("GGML assert", 500)
+        with patch("src.template_detect.pdf_io.rasterize_page", return_value=b"PNG"):
+            with pytest.raises(TemplateDetectionError) as exc:
+                detect_template("scan.pdf", client=client, model="qwen2.5vl:7b")
+        assert "qwen2.5vl:3b" in str(exc.value)
+
 
 # ---------------------------------------------------------------------------
 # Confidence clamping

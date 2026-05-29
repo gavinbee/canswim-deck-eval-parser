@@ -31,11 +31,35 @@ import time
 from pathlib import Path
 from typing import Any, Optional, Protocol
 
+import ollama
+
 from . import pdf_io, schema as s
 from .form_extract import PageExtraction
 from .templates.base import Template
 
 log = logging.getLogger(__name__)
+
+
+def describe_model_error(model: str, exc: "ollama.ResponseError") -> str:
+    """Human-readable message for an Ollama server error during inference.
+
+    A 500 from the model server is most often VRAM exhaustion or a
+    model/runtime incompatibility (e.g. a GGML assertion in the vision
+    encoder), so we point the user at the smaller-model and update paths
+    rather than leaving them with a raw traceback.
+    """
+    status = getattr(exc, "status_code", "?")
+    detail = getattr(exc, "error", None) or str(exc)
+    return (
+        f"The Ollama server errored while running {model} (status {status}): "
+        f"{detail}\n"
+        "This usually means the model ran out of VRAM, or the installed "
+        "Ollama / model build hit an internal error on this image. Things "
+        "to try:\n"
+        "  - a smaller model:  --vision-model qwen2.5vl:3b\n"
+        "  - update Ollama to the latest version\n"
+        "  - close other GPU-heavy apps to free VRAM"
+    )
 
 
 DEFAULT_VISION_MODEL = "qwen2.5vl:7b"
@@ -295,12 +319,21 @@ def make_same_meet_checker(client: VisionClient, model: str):
             page_one=_render_meet(page_one),
             page_n=_render_meet(page_n),
         )
-        response = client.generate(
-            model=model,
-            prompt=prompt,
-            format="json",
-            options={"temperature": 0},
-        )
+        try:
+            response = client.generate(
+                model=model,
+                prompt=prompt,
+                format="json",
+                options={"temperature": 0},
+            )
+        except ollama.ResponseError as exc:
+            # A model error here shouldn't abort the whole parse — degrade
+            # to "unknown" so the page carries forward and surfaces for
+            # review, with a warning explaining why.
+            log.warning(
+                "Same-meet check failed (%s); treating as unknown.", exc,
+            )
+            return SameMeetVerdict(verdict="unknown", confidence=0.0)
         text = getattr(response, "response", None)
         if text is None and isinstance(response, dict):
             text = response.get("response")
@@ -372,14 +405,24 @@ def _generate(
     prompt: str,
     png_bytes: bytes,
 ) -> str:
-    """One ``generate`` call. Returns the response text."""
-    response = client.generate(
-        model=model,
-        prompt=prompt,
-        images=[png_bytes],
-        format="json",
-        options={"temperature": 0},
-    )
+    """One ``generate`` call. Returns the response text.
+
+    A model/server error (``ollama.ResponseError``, e.g. an HTTP 500 from
+    a VRAM exhaustion or a vision-encoder assertion) is re-raised as a
+    clean ``VisionExtractionError`` so the CLI exits with a friendly
+    message instead of a stack trace. These errors are deterministic for
+    a given image, so we don't retry them here.
+    """
+    try:
+        response = client.generate(
+            model=model,
+            prompt=prompt,
+            images=[png_bytes],
+            format="json",
+            options={"temperature": 0},
+        )
+    except ollama.ResponseError as exc:
+        raise VisionExtractionError(describe_model_error(model, exc)) from exc
     # ollama-python returns a GenerateResponse with a ``.response`` attr;
     # also dict-accessible. Support both for forward/backward compat.
     text = getattr(response, "response", None)

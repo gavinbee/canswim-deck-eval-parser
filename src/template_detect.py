@@ -23,9 +23,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import ollama
+
 from . import pdf_io
 from .templates import TEMPLATES, TEMPLATE_STUBS, known_template_ids
-from .vision_extract import DEFAULT_VISION_MODEL, VisionClient, try_parse_json
+from .vision_extract import (
+    DEFAULT_VISION_MODEL,
+    VisionClient,
+    describe_model_error,
+    try_parse_json,
+)
 
 log = logging.getLogger(__name__)
 
@@ -111,13 +118,19 @@ def detect_template(
     png = pdf_io.rasterize_page(pdf_path, 0, dpi=dpi)
     prompt = build_prompt()
 
-    response = client.generate(
-        model=model,
-        prompt=prompt,
-        images=[png],
-        format="json",
-        options={"temperature": 0},
-    )
+    try:
+        response = client.generate(
+            model=model,
+            prompt=prompt,
+            images=[png],
+            format="json",
+            options={"temperature": 0},
+        )
+    except ollama.ResponseError as exc:
+        # A model/server error during detection is a runtime failure, not
+        # an "unidentifiable template" — surface it with the same
+        # smaller-model / update guidance as the extraction path.
+        raise TemplateDetectionError(describe_model_error(model, exc)) from exc
     text = getattr(response, "response", None)
     if text is None and isinstance(response, dict):
         text = response.get("response")
