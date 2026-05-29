@@ -31,6 +31,14 @@ log = logging.getLogger(__name__)
 # handwriting clearly without blowing up Ollama's context window.
 DEFAULT_DPI = 200
 
+# Cap on the rendered image's longest edge (pixels). A full-page scan at
+# 200 DPI is ~2200 px on the long edge, which Qwen2.5-VL's encoder turns
+# into a very large number of image tokens — slow (the vision tower often
+# runs on CPU under Ollama) and, at 7B, prone to a GGML projector assert.
+# Downscaling the long edge to ~1600 px keeps form text legible while
+# cutting encode time and memory dramatically. Tunable per call.
+DEFAULT_MAX_EDGE_PX = 1600
+
 
 # When a multi-page PDF has duplicate widget names across pages (which is
 # exactly what eval-gen produces — every page of the Swim Ontario form has
@@ -121,12 +129,17 @@ def rasterize_page(
     path: str | Path,
     page_index: int,
     dpi: int = DEFAULT_DPI,
+    max_edge_px: int = DEFAULT_MAX_EDGE_PX,
 ) -> bytes:
     """Render one page to PNG bytes.
 
     Used by the vision extractor and by template detection. Returns bytes
     rather than a Pillow ``Image`` so callers can pass them straight to
     the Ollama HTTP API without re-encoding.
+
+    If the rendered image's longest edge exceeds ``max_edge_px`` it is
+    downscaled (preserving aspect ratio) — see ``DEFAULT_MAX_EDGE_PX`` for
+    why. Pass ``max_edge_px=0`` to disable the cap.
     """
     with open_pdf(path) as doc:
         if not (0 <= page_index < len(doc)):
@@ -141,9 +154,30 @@ def rasterize_page(
         # Convert via Pillow so we get a real PNG with sensible
         # compression rather than PyMuPDF's raw output.
         img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+        img = _cap_long_edge(img, max_edge_px)
         buf = io.BytesIO()
         img.save(buf, format="PNG", optimize=True)
         return buf.getvalue()
+
+
+def _cap_long_edge(img: "Image.Image", max_edge_px: int) -> "Image.Image":
+    """Downscale ``img`` so its longest edge is <= ``max_edge_px``.
+
+    No-op if the cap is disabled (<= 0) or the image already fits.
+    Aspect ratio is preserved; uses LANCZOS for clean text downscaling.
+    """
+    if max_edge_px <= 0:
+        return img
+    longest = max(img.width, img.height)
+    if longest <= max_edge_px:
+        return img
+    scale = max_edge_px / longest
+    new_size = (round(img.width * scale), round(img.height * scale))
+    log.debug(
+        "Downscaling rasterized page from %dx%d to %dx%d (max_edge=%d)",
+        img.width, img.height, new_size[0], new_size[1], max_edge_px,
+    )
+    return img.resize(new_size, Image.LANCZOS)
 
 
 def page_dimensions(path: str | Path, page_index: int) -> tuple[float, float]:
