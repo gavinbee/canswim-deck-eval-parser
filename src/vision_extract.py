@@ -50,15 +50,18 @@ def describe_model_error(model: str, exc: "ollama.ResponseError") -> str:
     """
     status = getattr(exc, "status_code", "?")
     detail = getattr(exc, "error", None) or str(exc)
+    hint = (
+        "This is most likely a known Ollama + Qwen2.5-VL incompatibility, "
+        "not a problem with your PDF: the GGML_ASSERT projector crash and "
+        "the 8 GB-GPU 'runs 100% on CPU' fallback are both regressions in "
+        "Ollama >= 0.13.x (they work on 0.12.x). See docs/troubleshooting.md "
+        "for version guidance.\nIf instead this is genuine VRAM exhaustion, "
+        "try a smaller model (e.g. --vision-model qwen2.5vl:3b) or close "
+        "other GPU-heavy apps."
+    )
     return (
         f"The Ollama server errored while running {model} (status {status}): "
-        f"{detail}\n"
-        "This usually means the model ran out of VRAM, or the installed "
-        "Ollama / model build hit an internal error on this image. Things "
-        "to try:\n"
-        "  - a smaller model:  --vision-model qwen2.5vl:3b\n"
-        "  - update Ollama to the latest version\n"
-        "  - close other GPU-heavy apps to free VRAM"
+        f"{detail}\n{hint}"
     )
 
 

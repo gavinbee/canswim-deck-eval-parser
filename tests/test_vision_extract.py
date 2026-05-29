@@ -266,8 +266,10 @@ class TestModelCallAndRetry:
             extract_page(b"x", ONTARIO, "x.pdf", 1, client=client, model="qwen2.5vl:7b")
         msg = str(exc.value)
         assert "qwen2.5vl:7b" in msg
-        assert "qwen2.5vl:3b" in msg          # suggests the smaller model
-        assert "update Ollama" in msg.lower() or "update ollama" in msg.lower()
+        assert "qwen2.5vl:3b" in msg          # smaller-model fallback hint
+        # Points at the known Ollama regression + troubleshooting doc.
+        assert "0.12.x" in msg
+        assert "troubleshooting" in msg.lower()
         # Deterministic server error → single attempt, no retry.
         assert client.generate.call_count == 1
 
