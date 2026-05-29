@@ -121,6 +121,14 @@ def _configure_logging(verbosity: int) -> None:
         format="%(asctime)s  %(levelname)-7s  %(message)s",
         datefmt="%H:%M:%S",
     )
+    # httpx/httpcore emit one INFO line per request *after* the response
+    # returns — which masquerades as "starting" progress and hides where
+    # the real latency is (the model call). Our own per-call before/after
+    # logs carry the INFO-level story, so silence httpx's noise unless the
+    # user asked for full DEBUG (-vv).
+    if verbosity < 2:
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def run(args: argparse.Namespace) -> int:

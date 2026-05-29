@@ -7,6 +7,7 @@ inputs (tmp_path) cover the error branches.
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from contextlib import contextmanager
 from pathlib import Path
@@ -101,6 +102,30 @@ class TestArgumentParser:
         parser = cli.build_parser()
         args = parser.parse_args(["x.pdf", "-vv"])
         assert args.verbose == 2
+
+
+class TestLoggingConfig:
+    """httpx's per-request INFO line logs after the response and reads as
+    misleading progress; we quiet it unless -vv."""
+
+    def teardown_method(self):
+        # Reset the loggers we touch so tests don't leak state.
+        for name in ("httpx", "httpcore"):
+            logging.getLogger(name).setLevel(logging.NOTSET)
+
+    def test_httpx_quieted_at_info(self):
+        cli._configure_logging(verbosity=1)  # -v
+        assert logging.getLogger("httpx").level == logging.WARNING
+        assert logging.getLogger("httpcore").level == logging.WARNING
+
+    def test_httpx_quieted_at_default(self):
+        cli._configure_logging(verbosity=0)
+        assert logging.getLogger("httpx").level == logging.WARNING
+
+    def test_httpx_allowed_at_debug(self):
+        cli._configure_logging(verbosity=2)  # -vv
+        # At -vv we don't raise httpx's floor — DEBUG passes through.
+        assert logging.getLogger("httpx").level != logging.WARNING
 
 
 class TestHappyPath:

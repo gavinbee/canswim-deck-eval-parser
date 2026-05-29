@@ -19,6 +19,7 @@ explicit ``--template`` override.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -115,6 +116,11 @@ def detect_template(
         TemplateDetectionError: if the model returns ``unknown``, an
             unrecognised id, or a confidence below ``threshold``.
     """
+    log.info(
+        "Detecting template from page 1 of %s with %s …",
+        Path(pdf_path).name, model,
+    )
+    start = time.monotonic()
     png = pdf_io.rasterize_page(pdf_path, 0, dpi=dpi)
     prompt = build_prompt()
 
@@ -138,8 +144,8 @@ def detect_template(
 
     detection = _interpret(parsed, threshold=threshold, pdf_path=pdf_path)
     log.info(
-        "Detected template %s (confidence %.2f) for %s",
-        detection.template_id, detection.confidence, Path(pdf_path).name,
+        "Detected template %s (confidence %.2f) in %.1fs",
+        detection.template_id, detection.confidence, time.monotonic() - start,
     )
     return detection
 
