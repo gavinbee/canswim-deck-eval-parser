@@ -40,6 +40,19 @@ python main.py scan.pdf --vision-model qwen2.5vl:32b  # force the large tier
 
 `--edit-model` similarly overrides the text model.
 
+## Per-field confidence and the model floor
+
+Every extracted value carries a model-reported `confidence` in `[0, 1]` (see [output-schema.md](output-schema.md)). To make the model emit those reliably, the vision call constrains decoding with a **JSON Schema** (passed to Ollama's `format=`), built from the canonical field list in `src/schema.py`. Without that constraint, smaller models flatten each field to a bare scalar and the confidence is lost — the parser then falls back to a neutral `0.5` and logs a warning (background: gh #45).
+
+Confidence quality is **model-dependent**, and the schema can't fix that — it only guarantees the *shape*, not honest *numbers*:
+
+| Model | Confidence behavior |
+|---|---|
+| `qwen2.5vl:3b` | Unreliable. Tends to stamp a single constant value on every field — no usable signal. Treat 3B output as "values only," not confidence-scored. |
+| `qwen2.5vl:7b` _(default)_ | Coarse but useful. In practice a two-level signal — high (~0.9) on what it read confidently, lower (~0.6) on genuinely ambiguous cells (e.g. a crossed-out `successful`). Low values land on the rows worth a human's review. |
+
+**Practical implication:** the confidence-driven features (low-confidence surfacing in `--interactive`, the `row_confidence` composite) are meaningful from the **7B tier up**. On the 3B tier, prefer `--review-all` over relying on confidence thresholds.
+
 ## Why this family, not something else
 
 Reasoning is in [`design/0001-initial-design.md`](design/0001-initial-design.md#models--concrete-pinning). Short version: Qwen2.5-VL is currently the strongest open vision-language family on OCRBench v2 / DocVQA under 15 B params, has good handwriting performance, and the same model family covers both the vision and text-edit roles so users only deal with one ecosystem.
