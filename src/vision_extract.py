@@ -12,8 +12,10 @@ What this module owns:
   detected template's ``vision_prompt_addendum`` plus the source
   filename (so the model can resolve ``session_number`` from the form
   text, the filename, or both).
-* **The model call** — ``client.generate(..., format="json")`` at
-  temperature 0, with the page PNG as the image.
+* **The model call** — ``client.generate(..., format=<json schema>)``
+  at temperature 0, with the page PNG as the image. The schema (built
+  from ``src.schema``) constrains decoding to the ``{value, confidence}``
+  object shape so smaller models can't drop the per-field confidence.
 * **Parsing + validation** — turn the model's JSON into typed
   ``FieldValue`` objects, coercing ``successful`` to bool/null and
   capturing per-field confidence. One retry on a structural parse
@@ -143,6 +145,77 @@ def _json_skeleton() -> str:
     }}
   ]
 }}"""
+
+
+def _field_schema(value_type: str, *, extra: Optional[dict] = None) -> dict:
+    """A JSON-Schema object for one ``{value, confidence}`` field.
+
+    ``value`` is the given type or null; ``confidence`` is a number. ``extra``
+    adds further properties (e.g. ``source`` / ``rationale``).
+    """
+    props: dict[str, Any] = {
+        "value": {"type": [value_type, "null"]},
+        "confidence": {"type": "number"},
+    }
+    if extra:
+        props.update(extra)
+    return {
+        "type": "object",
+        "properties": props,
+        "required": ["value", "confidence"],
+    }
+
+
+def _build_json_schema() -> dict:
+    """JSON Schema for the page-extraction response.
+
+    Passed to Ollama's ``format=`` so decoding is constrained to the
+    ``{value, confidence}`` object shape. Without this, smaller models
+    (e.g. ``qwen2.5vl:3b``) collapse each field to a bare scalar — which
+    our parser then has to default to ``_DEFAULT_CONFIDENCE``, silently
+    losing the per-field confidence signal (see gh #45). Built from the
+    canonical ``src.schema`` constants so it can't drift from the prompt
+    skeleton or the parser.
+    """
+    meet_props = {k: _field_schema("string") for k in s.MEET_FIELDS}
+
+    session_props: dict[str, Any] = {
+        k: _field_schema("string")
+        for k in (s.COMPETITION_COORDINATOR, s.CC_LEVEL, s.DATE_SESSION)
+    }
+    session_props[s.SESSION_NUMBER] = _field_schema(
+        "integer",
+        extra={"source": {
+            "type": "string",
+            "enum": ["form", "filename", "form+filename", "unknown"],
+        }},
+    )
+
+    row_props = {
+        k: _field_schema("string")
+        for k in (s.OFFICIAL_NAME, s.CLUB, s.POSITION, s.LANE_NUMBER,
+                  s.TIMES_WORKED_POSITION, s.MENTOR, s.LEVEL)
+    }
+    row_props[s.SUCCESSFUL] = _field_schema(
+        "boolean", extra={"rationale": {"type": "string"}},
+    )
+
+    return {
+        "type": "object",
+        "properties": {
+            "meet": {"type": "object", "properties": meet_props},
+            "session": {"type": "object", "properties": session_props},
+            "rows": {
+                "type": "array",
+                "items": {"type": "object", "properties": row_props},
+            },
+        },
+        "required": ["meet", "session", "rows"],
+    }
+
+
+# Built once at import — the canonical field list is static.
+_VISION_FORMAT = _build_json_schema()
 
 
 _BASE_INSTRUCTIONS = """\
@@ -421,7 +494,7 @@ def _generate(
             model=model,
             prompt=prompt,
             images=[png_bytes],
-            format="json",
+            format=_VISION_FORMAT,
             options={"temperature": 0},
         )
     except ollama.ResponseError as exc:
@@ -471,8 +544,47 @@ def _is_structural(parsed: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _response_is_flat(raw: dict) -> bool:
+    """True if the model returned bare scalars instead of ``{value, ...}``
+    objects for every field it filled in.
+
+    This is the failure mode behind gh #45: a model that ignores the
+    requested object shape gives us values with no confidence, which the
+    parser then has to default. We detect it so the caller can warn rather
+    than silently emit a page of ``_DEFAULT_CONFIDENCE``. A response is
+    "flat" only if it carried at least one value and *none* of them used
+    the object form.
+    """
+    saw_value = False
+    sections: list[dict] = []
+    for key in ("meet", "session"):
+        section = raw.get(key)
+        if isinstance(section, dict):
+            sections.append(section)
+    for row in raw.get("rows") or []:
+        if isinstance(row, dict):
+            sections.append(row)
+    for section in sections:
+        for value in section.values():
+            if value is None:
+                continue
+            if isinstance(value, dict):
+                return False  # at least one proper object → not flat
+            saw_value = True
+    return saw_value
+
+
 def _parse_response(raw: dict, page_number: int) -> PageExtraction:
     """Turn one page's raw model JSON into a ``PageExtraction``."""
+    if _response_is_flat(raw):
+        log.warning(
+            "Page %d: vision model returned flat values with no per-field "
+            "confidence — defaulting all confidences to %.2f. This usually "
+            "means the model ignored the requested JSON shape (common on "
+            "smaller models like qwen2.5vl:3b); a larger model gives real "
+            "confidences. See gh #45.",
+            page_number, _DEFAULT_CONFIDENCE,
+        )
     result = PageExtraction(page_number=page_number)
 
     meet_obj = raw.get("meet") or {}

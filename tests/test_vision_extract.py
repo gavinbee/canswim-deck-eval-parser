@@ -212,6 +212,93 @@ class TestConfidenceClamping:
 
 
 # ---------------------------------------------------------------------------
+# JSON Schema constraining the response shape (gh #45)
+# ---------------------------------------------------------------------------
+
+
+class TestJsonSchema:
+    def setup_method(self):
+        self.schema = vision_extract._build_json_schema()
+
+    def test_top_level_sections(self):
+        assert self.schema["type"] == "object"
+        assert set(self.schema["properties"]) == {"meet", "session", "rows"}
+
+    def test_built_from_canonical_field_names(self):
+        meet = self.schema["properties"]["meet"]["properties"]
+        assert set(meet) == set(s.MEET_FIELDS)
+        row = self.schema["properties"]["rows"]["items"]["properties"]
+        for fld in s.ROW_FIELDS:
+            assert fld in row
+
+    def test_each_field_requires_value_and_confidence(self):
+        name = self.schema["properties"]["rows"]["items"]["properties"][s.OFFICIAL_NAME]
+        assert name["required"] == ["value", "confidence"]
+        assert name["properties"]["confidence"]["type"] == "number"
+        # value is nullable so blank fields are representable.
+        assert "null" in name["properties"]["value"]["type"]
+
+    def test_session_number_is_integer_with_source_enum(self):
+        sn = self.schema["properties"]["session"]["properties"][s.SESSION_NUMBER]
+        assert "integer" in sn["properties"]["value"]["type"]
+        assert set(sn["properties"]["source"]["enum"]) == {
+            "form", "filename", "form+filename", "unknown",
+        }
+
+    def test_successful_is_boolean_with_rationale(self):
+        suc = self.schema["properties"]["rows"]["items"]["properties"][s.SUCCESSFUL]
+        assert "boolean" in suc["properties"]["value"]["type"]
+        assert "rationale" in suc["properties"]
+
+
+# ---------------------------------------------------------------------------
+# Flat-response detection + warning (gh #45)
+# ---------------------------------------------------------------------------
+
+
+class TestFlatResponseWarning:
+    def test_detects_all_flat_response(self):
+        raw = {
+            "meet": {"competition_name": "X", "host_club": "Y"},
+            "rows": [{"official_name": "Allison Hill", "club": "HEX"}],
+        }
+        assert vision_extract._response_is_flat(raw) is True
+
+    def test_object_shaped_response_not_flat(self):
+        assert vision_extract._response_is_flat(_good_response(n_rows=1)) is False
+
+    def test_empty_response_not_flat(self):
+        # No values at all isn't "flat" — there's nothing being masked.
+        assert vision_extract._response_is_flat({"rows": []}) is False
+
+    def test_mixed_response_not_flat(self):
+        # One proper object is enough to show the model understood the shape.
+        raw = {
+            "meet": {"competition_name": {"value": "X", "confidence": 0.9},
+                     "host_club": "Y"},
+            "rows": [],
+        }
+        assert vision_extract._response_is_flat(raw) is False
+
+    def test_warns_when_parsing_flat_page(self, caplog):
+        raw = {
+            "meet": {"competition_name": "X"},
+            "rows": [{"official_name": "Allison Hill"}],
+        }
+        with caplog.at_level("WARNING", logger="src.vision_extract"):
+            vision_extract._parse_response(raw, page_number=2)
+        assert any(
+            "flat values" in r.message and "gh #45" in r.message
+            for r in caplog.records
+        )
+
+    def test_no_warning_on_object_shaped_page(self, caplog):
+        with caplog.at_level("WARNING", logger="src.vision_extract"):
+            vision_extract._parse_response(_good_response(n_rows=1), page_number=1)
+        assert not any("flat values" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
 # Model call + retry
 # ---------------------------------------------------------------------------
 
@@ -225,13 +312,19 @@ class TestModelCallAndRetry:
         assert client.generate.call_count == 1
         assert len(page.rows) == 1
 
-    def test_passes_image_and_json_format(self):
+    def test_passes_image_and_schema_format(self):
         client = _client_returning(_good_response(n_rows=1))
         extract_page(b"PNGBYTES", ONTARIO, "x.pdf", 1, client=client, model="qwen2.5vl:7b")
         _, kwargs = client.generate.call_args
         assert kwargs["model"] == "qwen2.5vl:7b"
         assert kwargs["images"] == [b"PNGBYTES"]
-        assert kwargs["format"] == "json"
+        # We constrain decoding with a JSON Schema (not the loose "json"
+        # string) so the model must emit {value, confidence} objects — see
+        # gh #45. The schema is the dict built from the canonical fields.
+        fmt = kwargs["format"]
+        assert isinstance(fmt, dict)
+        assert fmt["type"] == "object"
+        assert set(fmt["properties"]) == {"meet", "session", "rows"}
         assert kwargs["options"]["temperature"] == 0
 
     def test_retries_once_on_bad_json_then_succeeds(self):
