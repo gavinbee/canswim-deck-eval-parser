@@ -27,14 +27,42 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any, Optional, Protocol
+
+import ollama
 
 from . import pdf_io, schema as s
 from .form_extract import PageExtraction
 from .templates.base import Template
 
 log = logging.getLogger(__name__)
+
+
+def describe_model_error(model: str, exc: "ollama.ResponseError") -> str:
+    """Human-readable message for an Ollama server error during inference.
+
+    A 500 from the model server is most often VRAM exhaustion or a
+    model/runtime incompatibility (e.g. a GGML assertion in the vision
+    encoder), so we point the user at the smaller-model and update paths
+    rather than leaving them with a raw traceback.
+    """
+    status = getattr(exc, "status_code", "?")
+    detail = getattr(exc, "error", None) or str(exc)
+    hint = (
+        "This is most likely a known Ollama + Qwen2.5-VL incompatibility, "
+        "not a problem with your PDF: the GGML_ASSERT projector crash and "
+        "the 8 GB-GPU 'runs 100% on CPU' fallback are both regressions in "
+        "Ollama >= 0.13.x (they work on 0.12.x). See docs/troubleshooting.md "
+        "for version guidance.\nIf instead this is genuine VRAM exhaustion, "
+        "try a smaller model (e.g. --vision-model qwen2.5vl:3b) or close "
+        "other GPU-heavy apps."
+    )
+    return (
+        f"The Ollama server errored while running {model} (status {status}): "
+        f"{detail}\n{hint}"
+    )
 
 
 DEFAULT_VISION_MODEL = "qwen2.5vl:7b"
@@ -205,11 +233,22 @@ def extract_pdf(
         page_no = i + 1
         cached = cached_raw.get(str(page_no)) if cached_raw else None
         if cached is not None:
-            log.debug("Using cached vision response for page %d", page_no)
+            log.info("Page %d/%d: using cached vision response", page_no, n_pages)
             raw = cached
         else:
+            # The first page's time includes the model's cold load into
+            # VRAM, which dominates on a tight GPU — logging per-page
+            # timing makes that visible instead of looking like a hang.
+            log.info("Page %d/%d: extracting with %s …", page_no, n_pages, model)
+            start = time.monotonic()
             png = pdf_io.rasterize_page(pdf_path, i, dpi=dpi)
             raw = _call_model(client, model, template, filename, png)
+            elapsed = time.monotonic() - start
+            n_rows = len(raw.get("rows") or []) if isinstance(raw, dict) else 0
+            log.info(
+                "Page %d/%d: done in %.1fs (%d row(s))",
+                page_no, n_pages, elapsed, n_rows,
+            )
         raw_by_page[str(page_no)] = raw
         pages.append(_parse_response(raw, page_number=page_no))
 
@@ -235,6 +274,95 @@ def extract_page(
     """
     raw = _call_model(client, model, template, filename, png_bytes)
     return _parse_response(raw, page_number=page_number), raw
+
+
+# ---------------------------------------------------------------------------
+# Same-meet checker (for merge's multi-page reconciliation)
+# ---------------------------------------------------------------------------
+
+
+_SAME_MEET_PROMPT = """\
+Two pages of one scanned PDF each carry a meet header. Because the text
+was read off a scan, the same meet can appear with OCR noise, different
+abbreviations, or minor spelling differences. Decide whether these two
+headers refer to the SAME swimming meet.
+
+Page 1 header:
+{page_one}
+
+Other page header:
+{page_n}
+
+Respond with a SINGLE JSON object, nothing else:
+{{"verdict": "same" | "different" | "unknown", "confidence": <0.0-1.0>}}
+
+Use "same" if they're clearly the same meet (allowing for OCR noise),
+"different" if they're clearly different meets, "unknown" if you can't
+tell. Output ONLY the JSON object."""
+
+
+def make_same_meet_checker(client: VisionClient, model: str):
+    """Build a ``merge.SameMeetChecker`` backed by the loaded vision model.
+
+    Reuses the already-loaded vision model (Qwen2.5-VL handles text-only
+    prompts fine) rather than pulling a separate text model, so a
+    multi-page scan whose headers differ only by OCR noise gets a real
+    "same meet?" judgement instead of a spurious ``MultiMeetError``.
+
+    Returns a callable matching ``merge.SameMeetChecker``: it takes the
+    two pages' meet-field dicts and returns a ``merge.SameMeetVerdict``.
+    """
+    # Imported here (not at module top) to avoid a circular import:
+    # merge doesn't import vision_extract, but vision_extract reaching
+    # into merge at import time would couple their load order.
+    from .merge import SameMeetVerdict
+
+    def checker(page_one, page_n) -> "SameMeetVerdict":
+        prompt = _SAME_MEET_PROMPT.format(
+            page_one=_render_meet(page_one),
+            page_n=_render_meet(page_n),
+        )
+        try:
+            response = client.generate(
+                model=model,
+                prompt=prompt,
+                format="json",
+                options={"temperature": 0},
+            )
+        except ollama.ResponseError as exc:
+            # A model error here shouldn't abort the whole parse — degrade
+            # to "unknown" so the page carries forward and surfaces for
+            # review, with a warning explaining why.
+            log.warning(
+                "Same-meet check failed (%s); treating as unknown.", exc,
+            )
+            return SameMeetVerdict(verdict="unknown", confidence=0.0)
+        text = getattr(response, "response", None)
+        if text is None and isinstance(response, dict):
+            text = response.get("response")
+        parsed = try_parse_json(text or "")
+
+        verdict = "unknown"
+        confidence = 0.0
+        if isinstance(parsed, dict):
+            v = parsed.get("verdict")
+            if v in {"same", "different", "unknown"}:
+                verdict = v
+            confidence = _clamp_confidence(parsed.get("confidence"))
+        return SameMeetVerdict(verdict=verdict, confidence=confidence)
+
+    return checker
+
+
+def _render_meet(meet: dict) -> str:
+    """Render a ``{canonical_key: FieldValue}`` meet dict as readable text."""
+    lines = []
+    for key, fv in meet.items():
+        value = getattr(fv, "value", fv)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        lines.append(f"  {key}: {value}")
+    return "\n".join(lines) if lines else "  (no meet fields)"
 
 
 # ---------------------------------------------------------------------------
@@ -280,14 +408,24 @@ def _generate(
     prompt: str,
     png_bytes: bytes,
 ) -> str:
-    """One ``generate`` call. Returns the response text."""
-    response = client.generate(
-        model=model,
-        prompt=prompt,
-        images=[png_bytes],
-        format="json",
-        options={"temperature": 0},
-    )
+    """One ``generate`` call. Returns the response text.
+
+    A model/server error (``ollama.ResponseError``, e.g. an HTTP 500 from
+    a VRAM exhaustion or a vision-encoder assertion) is re-raised as a
+    clean ``VisionExtractionError`` so the CLI exits with a friendly
+    message instead of a stack trace. These errors are deterministic for
+    a given image, so we don't retry them here.
+    """
+    try:
+        response = client.generate(
+            model=model,
+            prompt=prompt,
+            images=[png_bytes],
+            format="json",
+            options={"temperature": 0},
+        )
+    except ollama.ResponseError as exc:
+        raise VisionExtractionError(describe_model_error(model, exc)) from exc
     # ollama-python returns a GenerateResponse with a ``.response`` attr;
     # also dict-accessible. Support both for forward/backward compat.
     text = getattr(response, "response", None)

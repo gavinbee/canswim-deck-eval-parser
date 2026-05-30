@@ -253,6 +253,26 @@ class TestModelCallAndRetry:
         with pytest.raises(VisionExtractionError):
             extract_page(b"x", ONTARIO, "x.pdf", 1, client=client, model="m")
 
+    def test_ollama_response_error_becomes_clean_vision_error(self):
+        # A 500 from the model server (e.g. VRAM / GGML assert) must
+        # surface as a VisionExtractionError with actionable guidance,
+        # not a raw traceback — and we don't retry a deterministic 500.
+        import ollama
+        client = MagicMock()
+        client.generate.side_effect = ollama.ResponseError(
+            "GGML_ASSERT(a->ne[2] * 4 == b->ne[0]) failed", 500,
+        )
+        with pytest.raises(VisionExtractionError) as exc:
+            extract_page(b"x", ONTARIO, "x.pdf", 1, client=client, model="qwen2.5vl:7b")
+        msg = str(exc.value)
+        assert "qwen2.5vl:7b" in msg
+        assert "qwen2.5vl:3b" in msg          # smaller-model fallback hint
+        # Points at the known Ollama regression + troubleshooting doc.
+        assert "0.12.x" in msg
+        assert "troubleshooting" in msg.lower()
+        # Deterministic server error → single attempt, no retry.
+        assert client.generate.call_count == 1
+
     def test_strips_markdown_fences(self):
         fenced = "```json\n" + json.dumps(_good_response(n_rows=1)) + "\n```"
         client = _client_returning(fenced)
@@ -286,6 +306,34 @@ class TestExtractPdfOrchestration:
         assert len(pages) == 2
         assert len(pages[0].rows) == 2
         assert len(pages[1].rows) == 1
+
+    def test_logs_per_page_progress(self, caplog):
+        client = _client_returning(_good_response(n_rows=2), _good_response(n_rows=1))
+        with patch("src.vision_extract.pdf_io.page_count", return_value=2), \
+             patch("src.vision_extract.pdf_io.rasterize_page", return_value=b"PNG"), \
+             caplog.at_level("INFO", logger="src.vision_extract"):
+            extract_pdf("scan.pdf", ONTARIO, client=client, model="m")
+        msgs = [r.message for r in caplog.records]
+        # One "extracting" line and one "done" line per page, numbered N/total.
+        assert any("Page 1/2: extracting" in m for m in msgs)
+        assert any("Page 1/2: done" in m for m in msgs)
+        assert any("Page 2/2: extracting" in m for m in msgs)
+        # The done line reports the row count it parsed.
+        assert any("Page 1/2: done" in m and "2 row(s)" in m for m in msgs)
+
+    def test_logs_cache_hit(self, tmp_path, caplog):
+        cache = tmp_path / "scan.raw.json"
+        cache.write_text(json.dumps({
+            "model": "m", "source_pdf": "scan.pdf",
+            "pages": {"1": _good_response(n_rows=1)},
+        }), encoding="utf-8")
+        client = _client_returning()  # must not be called
+        with patch("src.vision_extract.pdf_io.page_count", return_value=1), \
+             patch("src.vision_extract.pdf_io.rasterize_page", return_value=b"PNG"), \
+             caplog.at_level("INFO", logger="src.vision_extract"):
+            extract_pdf("scan.pdf", ONTARIO, client=client, model="m",
+                        cache_path=cache)
+        assert any("Page 1/1: using cached" in r.message for r in caplog.records)
 
 
 class TestCache:
@@ -328,6 +376,62 @@ class TestCache:
         assert client.generate.call_count == 1
         assert len(pages[0].rows) == 1
 
+class TestSameMeetChecker:
+    """make_same_meet_checker wraps the vision model as a merge.SameMeetChecker."""
+
+    def _meet(self, name):
+        return {
+            s.COMPETITION_NAME: s.FieldValue(name, 0.9),
+            s.HOST_CLUB: s.FieldValue("AAC", 0.9),
+        }
+
+    def test_same_verdict(self):
+        client = _client_returning({"verdict": "same", "confidence": 0.88})
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("Aurora Open 2026"),
+                          self._meet("Aurora Open 2O26"))  # OCR noise
+        assert verdict.verdict == "same"
+        assert verdict.confidence == 0.88
+
+    def test_different_verdict(self):
+        client = _client_returning({"verdict": "different", "confidence": 0.95})
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("Aurora Open"), self._meet("Birch Cup"))
+        assert verdict.verdict == "different"
+
+    def test_text_only_call_has_no_image(self):
+        client = _client_returning({"verdict": "same", "confidence": 0.9})
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        checker(self._meet("X"), self._meet("X"))
+        # The same-meet check is text-only — no image attached.
+        assert "images" not in client.generate.call_args.kwargs
+
+    def test_garbage_response_is_unknown(self):
+        client = _client_returning("not json")
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("X"), self._meet("Y"))
+        assert verdict.verdict == "unknown"
+        assert verdict.confidence == 0.0
+
+    def test_bad_verdict_string_is_unknown(self):
+        client = _client_returning({"verdict": "maybe", "confidence": 0.5})
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("X"), self._meet("Y"))
+        assert verdict.verdict == "unknown"
+
+    def test_response_error_degrades_to_unknown(self):
+        # A model error in the same-meet check must NOT abort the parse —
+        # degrade to "unknown" so the page carries forward for review.
+        import ollama
+        client = MagicMock()
+        client.generate.side_effect = ollama.ResponseError("boom", 500)
+        checker = vision_extract.make_same_meet_checker(client, "m")
+        verdict = checker(self._meet("X"), self._meet("Y"))
+        assert verdict.verdict == "unknown"
+        assert verdict.confidence == 0.0
+
+
+class TestCacheMore:
     def test_cache_ignored_when_model_differs(self, tmp_path):
         cache = tmp_path / "scan.raw.json"
         cache.write_text(json.dumps({

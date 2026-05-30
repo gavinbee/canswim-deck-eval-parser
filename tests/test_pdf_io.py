@@ -127,6 +127,39 @@ class TestRasterizePage:
         with pytest.raises(IndexError):
             pdf_io.rasterize_page(FIXTURE, 99)
 
+    def test_long_edge_capped_by_default(self):
+        # The fixture page at 200 DPI is ~2200 px on the long edge; the
+        # default cap (1600) must bring it down so the vision encoder
+        # isn't handed a huge image.
+        from PIL import Image
+        import io
+        png = pdf_io.rasterize_page(FIXTURE, 0)  # default dpi + cap
+        img = Image.open(io.BytesIO(png))
+        assert max(img.size) <= pdf_io.DEFAULT_MAX_EDGE_PX
+
+    def test_cap_disabled_with_zero(self):
+        from PIL import Image
+        import io
+        capped = Image.open(io.BytesIO(pdf_io.rasterize_page(FIXTURE, 0, dpi=200)))
+        uncapped = Image.open(
+            io.BytesIO(pdf_io.rasterize_page(FIXTURE, 0, dpi=200, max_edge_px=0))
+        )
+        # Uncapped keeps the full 200-DPI resolution; capped is smaller.
+        assert max(uncapped.size) > max(capped.size)
+
+    def test_aspect_ratio_preserved_when_capped(self):
+        from PIL import Image
+        import io
+        full = Image.open(
+            io.BytesIO(pdf_io.rasterize_page(FIXTURE, 0, dpi=200, max_edge_px=0))
+        )
+        capped = Image.open(
+            io.BytesIO(pdf_io.rasterize_page(FIXTURE, 0, dpi=200, max_edge_px=800))
+        )
+        assert max(capped.size) <= 800
+        # Aspect ratio within rounding tolerance.
+        assert abs(full.width / full.height - capped.width / capped.height) < 0.01
+
 
 class TestPageDimensions:
     def test_returns_letter_landscape(self):
