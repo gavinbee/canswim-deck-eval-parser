@@ -25,14 +25,17 @@ Recorded command for the committed fixture:
     python tests/fixtures/vision_scan/make_synthetic_scan.py --seed 42
 
 Inputs:
-    A blank template PDF, committed in-tree under
-    ``tests/fixtures/templates/<template_id>/eval_form.pdf`` (one per
-    supported template). Keeping a copy in the source tree means anyone can
-    regenerate the fixture without cloning eval-gen, and a material change to
-    a province's form shows up as a diff to its committed blank — a useful
-    signal when template *detection* starts failing on a redesigned form.
-    ``--template`` overrides the path (e.g. to regenerate from a fresh
-    eval-gen export).
+    A blank template PDF, committed in-tree at
+    ``templates/<template_id>.pdf`` (one per supported template, alongside
+    ``src/templates/<template_id>.py`` and ``docs/templates/``). It's a
+    first-class reference asset, not a test fixture: nothing in the test
+    suite opens it — only this generator and template detection do — so it
+    lives at the repo root rather than under ``tests/``. Keeping a copy in
+    the source tree means anyone can regenerate the fixture without cloning
+    eval-gen, and a material change to a province's form shows up as a diff
+    to its committed blank — a useful signal when template *detection*
+    starts failing on a redesigned form. ``--template`` overrides the path
+    (e.g. to regenerate from a fresh eval-gen export).
 
 Outputs (overwritten in this directory):
     ``session_1_evals_scan.pdf``        — flattened image-only PDF
@@ -336,16 +339,14 @@ def generate(
 
 
 # Template id this fixture is generated for. The blank form lives in-tree
-# under tests/fixtures/templates/<id>/eval_form.pdf.
+# at the repo-root templates/<id>.pdf (a first-class reference asset).
 TEMPLATE_ID = "swim_ontario_v1"
 
 
 def _in_tree_template_path() -> Path:
-    """The committed blank template for ``TEMPLATE_ID``."""
-    return (
-        Path(__file__).resolve().parents[1]
-        / "templates" / TEMPLATE_ID / "eval_form.pdf"
-    )
+    """The committed blank template for ``TEMPLATE_ID`` (repo-root templates/)."""
+    repo_root = Path(__file__).resolve().parents[3]
+    return repo_root / "templates" / f"{TEMPLATE_ID}.pdf"
 
 
 def _default_template_path() -> Path:

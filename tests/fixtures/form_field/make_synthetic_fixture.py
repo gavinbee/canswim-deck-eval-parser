@@ -21,9 +21,10 @@ this docstring's recorded command and the assertions in
 ``tests/test_form_extract.py`` that reference specific synthetic names.
 
 Inputs:
-    The blank Swim Ontario eval_form.pdf, located by default at
-    ``../../eval-gen/eval_form.pdf`` relative to this repo. Swim Ontario
-    publishes the form publicly; the blank contains no PII.
+    The blank Swim Ontario template, committed in-tree at
+    ``templates/swim_ontario_v1.pdf`` (falling back to a sibling eval-gen
+    checkout when refreshing it). Swim Ontario publishes the form publicly;
+    the blank contains no PII.
 
 Outputs:
     Overwrites ``session_1_evals.pdf`` in this directory.
@@ -200,19 +201,30 @@ def generate(
     output.close()
 
 
+# Template id this fixture is generated for. The blank form lives in-tree
+# at the repo-root templates/<id>.pdf (a first-class reference asset shared
+# with the vision-scan generator).
+TEMPLATE_ID = "swim_ontario_v1"
+
+
 def _default_template_path() -> Path:
-    """Best-effort guess at where the blank eval_form.pdf lives locally."""
-    candidates = [
-        Path(__file__).resolve().parents[3].parent / "eval-gen" / "eval_form.pdf",
+    """Locate the blank template, preferring the committed in-tree copy."""
+    repo_root = Path(__file__).resolve().parents[3]
+    in_tree = repo_root / "templates" / f"{TEMPLATE_ID}.pdf"
+    if in_tree.is_file():
+        return in_tree
+    # Fall back to a sibling eval-gen checkout (handy when refreshing the
+    # committed blank from a new export).
+    for c in (
+        repo_root.parent / "eval-gen" / "eval_form.pdf",
         Path("C:/Users/gavbe/src/eval-gen/eval_form.pdf"),
-    ]
-    for c in candidates:
+    ):
         if c.is_file():
             return c
     raise FileNotFoundError(
-        "Could not find eval-gen/eval_form.pdf. Either clone "
-        "https://github.com/swimblocks/deck-eval-gen alongside this repo, or "
-        "pass --template /path/to/eval_form.pdf"
+        f"Could not find a blank template. Expected the committed copy at "
+        f"{in_tree}, or a sibling eval-gen checkout. Pass --template "
+        f"/path/to/eval_form.pdf to override."
     )
 
 
@@ -225,8 +237,8 @@ def _parse_args() -> argparse.Namespace:
         "--template",
         type=Path,
         default=None,
-        help="Path to the blank Swim Ontario eval_form.pdf. "
-             "Defaults to eval-gen/eval_form.pdf next to this repo.",
+        help="Path to the blank Swim Ontario template. "
+             "Defaults to the in-tree templates/swim_ontario_v1.pdf.",
     )
     p.add_argument(
         "--output",
