@@ -22,7 +22,7 @@
       "lane_number": null,
       "times_worked_position": "1",
       "mentor": "Allison Hill",
-      "level": "II",
+      "level": "2",
       "successful": true
     },
     {
@@ -34,7 +34,7 @@
       "lane_number": null,
       "times_worked_position": "3",
       "mentor": "Allen Robinson",
-      "level": "III",
+      "level": "3",
       "successful": true
     },
     {
@@ -46,7 +46,7 @@
       "lane_number": "4",
       "times_worked_position": "5",
       "mentor": "Jerry Ramirez",
-      "level": "IV",
+      "level": "4",
       "successful": true
     },
     {
@@ -58,7 +58,7 @@
       "lane_number": "5",
       "times_worked_position": "8",
       "mentor": "Tyler Rogers",
-      "level": "V",
+      "level": "5",
       "successful": true
     },
     {
@@ -70,7 +70,7 @@
       "lane_number": null,
       "times_worked_position": "12",
       "mentor": "Joe Martinez",
-      "level": "II",
+      "level": "2",
       "successful": true
     },
     {
@@ -82,7 +82,7 @@
       "lane_number": "1",
       "times_worked_position": "20",
       "mentor": "Michele Williams",
-      "level": "III",
+      "level": "3",
       "successful": true
     },
     {
@@ -94,7 +94,7 @@
       "lane_number": "2",
       "times_worked_position": "1",
       "mentor": "Mark Diaz",
-      "level": "IV",
+      "level": "4",
       "successful": true
     },
     {
@@ -106,7 +106,7 @@
       "lane_number": null,
       "times_worked_position": "3",
       "mentor": "Carolyn Daniel",
-      "level": "V",
+      "level": "5",
       "successful": false
     },
     {
@@ -118,7 +118,7 @@
       "lane_number": null,
       "times_worked_position": "5",
       "mentor": "Frederick Tate",
-      "level": "II",
+      "level": "2",
       "successful": null
     },
     {
@@ -130,7 +130,7 @@
       "lane_number": "3",
       "times_worked_position": "8",
       "mentor": "Tommy Walter",
-      "level": "III",
+      "level": "3",
       "successful": true
     },
     {
@@ -142,7 +142,7 @@
       "lane_number": "4",
       "times_worked_position": "12",
       "mentor": "David Hoffman",
-      "level": "IV",
+      "level": "4",
       "successful": true
     }
   ]

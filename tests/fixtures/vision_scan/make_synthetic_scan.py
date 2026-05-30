@@ -25,8 +25,14 @@ Recorded command for the committed fixture:
     python tests/fixtures/vision_scan/make_synthetic_scan.py --seed 42
 
 Inputs:
-    The blank Swim Ontario ``eval_form.pdf`` (located like the form-field
-    generator: ``../../eval-gen/eval_form.pdf`` or the hard-coded fallback).
+    A blank template PDF, committed in-tree under
+    ``tests/fixtures/templates/<template_id>/eval_form.pdf`` (one per
+    supported template). Keeping a copy in the source tree means anyone can
+    regenerate the fixture without cloning eval-gen, and a material change to
+    a province's form shows up as a diff to its committed blank — a useful
+    signal when template *detection* starts failing on a redesigned form.
+    ``--template`` overrides the path (e.g. to regenerate from a fresh
+    eval-gen export).
 
 Outputs (overwritten in this directory):
     ``session_1_evals_scan.pdf``        — flattened image-only PDF
@@ -71,8 +77,9 @@ LANE_BY_POSITION = {
     "Timer":              cycle(["1", "2", "3", "4", "5", "6", "7", "8"]),
 }
 
-# The mentor's officiating level (Swim Ontario levels are Roman numerals).
-LEVELS = cycle(["II", "III", "IV", "V"])
+# The mentor's officiating level. On these forms the level is virtually
+# always written as an Arabic numeral, so the fixture uses Arabic too.
+LEVELS = cycle(["2", "3", "4", "5"])
 
 # How many times the official has worked the position — a small spread of
 # plausible values. Deliberately *not* equal to the lane number, so the
@@ -328,18 +335,36 @@ def generate(
     )
 
 
+# Template id this fixture is generated for. The blank form lives in-tree
+# under tests/fixtures/templates/<id>/eval_form.pdf.
+TEMPLATE_ID = "swim_ontario_v1"
+
+
+def _in_tree_template_path() -> Path:
+    """The committed blank template for ``TEMPLATE_ID``."""
+    return (
+        Path(__file__).resolve().parents[1]
+        / "templates" / TEMPLATE_ID / "eval_form.pdf"
+    )
+
+
 def _default_template_path() -> Path:
-    candidates = [
+    # Prefer the in-tree copy so regeneration needs no external clone.
+    in_tree = _in_tree_template_path()
+    if in_tree.is_file():
+        return in_tree
+    # Fall back to a sibling eval-gen checkout (handy when refreshing the
+    # committed blank from a new export).
+    for c in (
         Path(__file__).resolve().parents[3].parent / "eval-gen" / "eval_form.pdf",
         Path("C:/Users/gavbe/src/eval-gen/eval_form.pdf"),
-    ]
-    for c in candidates:
+    ):
         if c.is_file():
             return c
     raise FileNotFoundError(
-        "Could not find eval-gen/eval_form.pdf. Either clone "
-        "https://github.com/swimblocks/deck-eval-gen alongside this repo, or "
-        "pass --template /path/to/eval_form.pdf"
+        f"Could not find a blank template. Expected the committed copy at "
+        f"{in_tree}, or a sibling eval-gen checkout. Pass --template "
+        f"/path/to/eval_form.pdf to override."
     )
 
 
