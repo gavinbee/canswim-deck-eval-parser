@@ -36,6 +36,52 @@ ollama --version
 
 If it reports 0.13.x or newer and you hit either symptom above on an NVIDIA card, the 0.12.x downgrade is the current remedy.
 
+## Downgrading Ollama to 0.12.x
+
+### Windows
+
+The install scripts use `winget`, and `winget` *can* pin a version:
+
+```
+winget install Ollama.Ollama --version 0.12.11
+```
+
+Two caveats:
+
+- **The version must still be in the `winget` catalog.** Ollama ships
+  frequently and old manifests get pruned, so a given 0.12.x may no longer
+  be offered. List what's actually available with:
+  ```
+  winget show Ollama.Ollama --versions
+  ```
+- **`winget` won't silently downgrade over a newer install.** If a newer
+  version is already present, add `--force`, or uninstall first
+  (`winget uninstall Ollama.Ollama`).
+
+If the version you want isn't in the catalog (the common case for a
+specific older release), use the **GitHub release installer** instead —
+it's version-pinned and always available:
+
+1. Open <https://github.com/ollama/ollama/releases>.
+2. Find the 0.12.x release you want (0.12.11 is known-good on an 8 GB
+   RTX-class card).
+3. Download `OllamaSetup.exe` from that release's assets and run it. It
+   installs over the existing version.
+
+After installing, confirm with `ollama --version` (expect `0.12.11`).
+On a good version the daemon log shows the model GPU-offloading —
+e.g. `offloaded 37/37 layers to GPU` — rather than a `100% CPU` fallback.
+
+### macOS / Linux
+
+Re-run the official installer pinned to a version, or download the
+matching release asset from <https://github.com/ollama/ollama/releases>.
+On Linux the install script honors a version:
+
+```
+curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.12.11 sh
+```
+
 ## Ollama not found / daemon won't start
 
 See [installation.md](installation.md#troubleshooting-install-issues).
