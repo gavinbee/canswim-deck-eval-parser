@@ -1,0 +1,8 @@
+---
+description: SwimBlocks deck-eval-parser — agent guide pointer
+alwaysApply: true
+---
+
+The full repo guide is in [AGENTS.md](../../AGENTS.md). It points at the canonical org-wide
+rules in [swimblocks/.github](https://github.com/swimblocks/.github). Follow the work-loop in
+the canonical AGENTS.md (issue → branch → PR → hand off; agents do not self-merge).
